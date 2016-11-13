@@ -36,7 +36,7 @@ elif [ "$TRAVIS_PULL_REQUEST" == "false" ] && [ "$TRAVIS_TAG" == "" ]; then
   	strongEcho 'Build Branch with Snapshot => Branch ['$TRAVIS_BRANCH']'
 
     # for snapshots we upload to Sonatype OSS
-    ./gradlew snapshot uploadArchives sonarqube \
+    ./gradlew snapshot uploadArchives sonarqube --info \
     -Dsonar.host.url=$SONAR_HOST_URL \
     -Dsonar.login=$SONAR_LOGIN \
     -Prelease.travisci=true \
