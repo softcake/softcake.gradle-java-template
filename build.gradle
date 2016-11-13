@@ -1,0 +1,236 @@
+/**
+ *
+ * @author Rene Neubert
+ *
+ */
+plugins {
+	id 'com.jfrog.bintray' version '1.7'
+	id 'nebula.nebula-release' version '4.0.1'
+	id 'ru.vyarus.github-info' version '1.1.0'
+	id 'org.sonarqube' version '2.2'
+	id 'se.bjurr.gitchangelog.git-changelog-gradle-plugin' version '1.40'
+	id 'com.bmuschko.nexus' version '2.3.1' /**/
+}
+group 'org.softcake'
+
+github {
+	user 'softcake' //github user or organisation
+	license 'Apache'
+}
+
+allprojects {
+	repositories {
+		mavenCentral()
+		jcenter()
+	}
+
+	apply plugin: 'idea'
+	apply plugin: 'maven'
+	apply plugin: 'maven-publish'
+	apply plugin: 'signing'
+	apply plugin: 'java'
+	apply plugin: 'jacoco'
+	apply plugin: 'findbugs'
+
+}
+
+dependencies {
+	testCompile group: 'junit', name: 'junit', version: '4.11'
+	compile group: 'org.slf4j', name: 'slf4j-api', version: '1.7.21'
+	compile group: 'org.slf4j', name: 'slf4j-log4j12', version: '1.7.21'
+	compile group: 'log4j', name: 'log4j', version: '1.2.16'
+}
+
+ext {
+	isTravisBuild = System.getenv().get("TRAVIS") == 'true'
+	nexusUsername = System.getenv("SONATYPE_USERNAME") ?:
+									project.hasProperty("sonatypeOssUsername") ? project.sonatypeOssUsername : ''
+	nexusPassword = System.getenv("SONATYPE_PASSWORD") ?:
+									project.hasProperty("sonatypeOssPassword") ? project.sonatypeOssPassword : ''
+
+}
+
+
+sonarqube {
+	properties {
+		property "sonar.projectKey", project.group + ':' + project.name
+		property "sonar.projectName", project.name
+	}
+}
+
+jar {
+
+	manifest {
+		attributes 'Implementation-Title': project.name,
+							 'Implementation-Version': project.hasProperty("version") ? project.version : '',
+							 'Built-By': System.getProperty('user.name'),
+							 'Built-Date': new Date(),
+							 'Built-JDK': System.getProperty('java.version'),
+							 'Built-Gradle': gradle.gradleVersion,
+							 'Main-Class': 'org.softcake.template.HelloWorld'
+	}
+
+}
+ext {
+	pomInfo = {
+		delegate.name project.name
+		delegate.description project.description
+		delegate.url github.site
+		delegate.inceptionYear '2016'
+
+		delegate.scm {
+			delegate.connection github.scmConnection
+			delegate.developerConnection github.scmConnection
+			delegate.url github.vcsUrl
+		}
+		delegate.issueManagement {
+			delegate.system 'GitHub'
+			delegate.url github.issues
+		}
+
+		delegate.licenses {
+			delegate.license {
+				delegate.url github.licenseUrl
+				delegate.name github.licenseName
+				delegate.distribution 'repo'
+			}
+		}
+
+		delegate.developers {
+			delegate.developer {
+				delegate.id 'softcake'
+				delegate.name 'Rene Neubert'
+				delegate.email 'rene.neubert@softcake.org'
+				delegate.roles {
+					delegate.role 'owner'
+				}
+			}
+		}
+	}
+
+}
+task gitChangelogTask(type: se.bjurr.gitchangelog.plugin.gradle.GitChangelogTask) {
+	gitHubApi = "https://api.github.com/repos/softckae/softcake.gradle-java-template";
+	gitHubToken = System.getenv("GH_TOKEN");
+	gitHubIssuePattern = "#([0-9]*)";
+	filePath = "CHANGELOG.md";
+	templateContent = new File('changelog.mustache').getText('UTF-8');
+}
+
+modifyPom {
+	delegate.project(pomInfo).dependencies.removeAll {it.scope == "test"}
+}
+
+extraArchive {
+	sources = true
+	tests = false
+	javadoc = true
+}
+
+nexus {
+	sign = true
+}
+
+
+publishing {
+	publications {
+		maven(MavenPublication) {
+			from components.java
+
+			pom.withXml {
+
+				def xml = asNode()
+				xml.children().last() + pomInfo
+
+				for (dep in configurations.compile.resolvedConfiguration.firstLevelModuleDependencies) {
+					asNode().dependencies[0].dependency.find {
+						it.artifactId[0].text() == dep.moduleName && it.groupId[0].text() == dep.moduleGroup
+					}?.scope[0]?.value = 'compile'
+				}
+
+			}
+		}
+	}
+}
+
+bintray {
+	def u = System.getenv("BINTRAY_USER") ?: project.hasProperty("bintrayUser") ? project.bintrayUser : 'user'
+	def p = System.getenv("BINTRAY_KEY") ?: project.hasProperty("bintrayKey") ? project.bintrayKey : 'key'
+
+	user = u
+	key = p
+
+	publications = ['maven']
+	publish = true
+	dryRun = !project.hasProperty("bintrayNoDryRun")
+
+	pkg {
+		repo = 'softcake'
+		name = project.name
+		userOrg = 'softcake'
+		desc = description
+		websiteUrl = github.site
+		issueTrackerUrl = github.issues
+		vcsUrl = github.vcsUrl
+		licenses = ['Apache-2.0']
+		labels = ['softcake', 'gradle', 'template', 'java', 'release']
+		publicDownloadNumbers = true
+		githubRepo = github.user + '/' + github.repository //Optional Github repository
+		githubReleaseNotesFile = 'README.md' //Optional Github readme file
+		configurations = ['archives']
+		version {
+			released = new Date()
+			name = project.version
+
+			gpg {
+				sign = true
+			}
+			mavenCentralSync {
+				sync = false
+				def ossUser = System.getenv("SONATYPE_USERNAME") ?:
+											project.hasProperty("sonatypeOssUsername") ? project.sonatypeOssUsername : ''
+				def ossPass = System.getenv("SONATYPE_PASSWORD") ?:
+											project.hasProperty("sonatypeOssPassword") ? project.sonatypeOssPassword : ''
+				user = ossUser
+				password = ossPass
+				close = '1'
+
+			}
+		}
+
+	}
+}
+
+if (project.hasProperty('release.useLastTag')) {
+	tasks.prepare.enabled = false
+}
+
+jacocoTestReport {
+	reports {
+		xml.enabled = true
+		html.enabled = true
+	}
+}
+
+build.dependsOn jacocoTestReport
+
+tasks.withType(JavaCompile) {
+	sourceCompatibility = 1.8
+	targetCompatibility = 1.8
+}
+
+findbugs {
+	ignoreFailures true
+	toolVersion = '3.0.1'
+	effort = 'max'
+	reportLevel = 'low'
+	sourceSets = [sourceSets.main]
+}
+
+findbugsMain {
+	reports {
+		html.enabled = false // Findbugs can only have on report enabled
+		xml.enabled = true
+	}
+}
+
