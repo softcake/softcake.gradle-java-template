@@ -31,7 +31,7 @@ if [ "$TRAVIS_PULL_REQUEST" != "false" ] && [ "$TRAVIS_SECURE_ENV_VARS" == "true
       	-Dsonar.host.url=$SONAR_HOST_URL \
       	-Dsonar.login=$SONAR_LOGIN || EXIT_STATUS=$?
 
-elif [ "$TRAVIS_PULL_REQUEST" == "false" ] && [ "$TRAVIS_TAG" == "" ]; then
+elif [ "$TRAVIS_PULL_REQUEST" == "false" ] && [ "$TRAVIS_TAG" == "" ]&& [ "$TRAVIS_BRANCH" != "master" ]; then
 
   	strongEcho 'Build Branch with Snapshot => Branch ['$TRAVIS_BRANCH']'
 
