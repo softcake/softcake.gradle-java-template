@@ -31,12 +31,25 @@ if [ "$TRAVIS_PULL_REQUEST" != "false" ] && [ "$TRAVIS_SECURE_ENV_VARS" == "true
       	-Dsonar.host.url=$SONAR_HOST_URL \
       	-Dsonar.login=$SONAR_LOGIN || EXIT_STATUS=$?
 
-elif [ "$TRAVIS_PULL_REQUEST" == "false" ] && [ "$TRAVIS_TAG" == "" ]&& [ "$TRAVIS_BRANCH" != "master" ]; then
+elif [ "$TRAVIS_PULL_REQUEST" == "false" ] && [ "$TRAVIS_TAG" == "" ]&& [ "$TRAVIS_BRANCH" == "master" ]; then
 
   	strongEcho 'Build Branch with Snapshot => Branch ['$TRAVIS_BRANCH']'
 
     # for snapshots we upload to Sonatype OSS
     ./gradlew snapshot uploadArchives sonarqube --info \
+    -Dsonar.host.url=$SONAR_HOST_URL \
+    -Dsonar.login=$SONAR_LOGIN \
+    -Prelease.travisci=true \
+    -Dsonar.projectVersion=$TRAVIS_BRANCH \
+    -Psigning.keyId="$SIGNING_KEY" \
+    -Psigning.password="$SIGNING_PASSPHRASE" \
+    -Psigning.secretKeyRingFile="${TRAVIS_BUILD_DIR}/secring.gpg" || EXIT_STATUS=$?
+elif [ "$TRAVIS_PULL_REQUEST" == "false" ] && [ "$TRAVIS_TAG" == "" ]&& [ "$TRAVIS_BRANCH" != "master" ]; then
+
+  	strongEcho 'Build Branch ['$TRAVIS_BRANCH']'
+
+    # for snapshots we upload to Sonatype OSS
+    ./gradlew sonarqube --info \
     -Dsonar.host.url=$SONAR_HOST_URL \
     -Dsonar.login=$SONAR_LOGIN \
     -Prelease.travisci=true \
